@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.s3.analyticsaccelerator.io.physical.LoggingUtil;
 import software.amazon.s3.analyticsaccelerator.request.ObjectContent;
 import software.amazon.s3.analyticsaccelerator.request.Range;
 
@@ -54,16 +55,27 @@ public class StreamUtils {
             () -> {
               try {
                 int numBytesRead;
-                LOG.debug(
+                LOG.info(
                     "Starting to read from InputStream for Block s3URI={}, etag={}, start={}, end={}",
                     objectKey.s3URI,
                     objectKey.etag,
                     range.getStart(),
                     range.getEnd());
+                LoggingUtil.LogBuilder logger =
+                    LoggingUtil.start(
+                            LOG, "toByteArray: Starting to read from InputStream for Block")
+                        .withParam("s3Uri", objectKey.s3URI)
+                        .withParam("etag", objectKey.etag)
+                        .withParam("start", range.getStart())
+                        .withParam("end", range.getEnd())
+                        .withThreadInfo()
+                        .withTiming();
+                logger.logStart();
                 while ((numBytesRead = inStream.read(buffer, 0, buffer.length)) != -1) {
                   outStream.write(buffer, 0, numBytesRead);
                 }
-                LOG.debug(
+                logger.logEnd();
+                LOG.info(
                     "Successfully read from InputStream for Block numBytesRead={}, s3URI={}, etag={}, start={}, end={}",
                     numBytesRead,
                     objectKey.s3URI,
@@ -81,7 +93,7 @@ public class StreamUtils {
 
     } catch (TimeoutException e) {
       future.cancel(true);
-      LOG.debug(
+      LOG.info(
           "Reading from InputStream has timed out for Block s3URI={}, etag={}, start={}, end={}",
           objectKey.s3URI,
           objectKey.etag,
