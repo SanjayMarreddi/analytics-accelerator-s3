@@ -49,26 +49,26 @@ jobs:
         # Get key ID
         KEY_ID=$(gpg --list-keys --keyid-format SHORT | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
-        # Get Sonatype credentials
-        SONATYPE_CREDS=$(aws secretsmanager get-secret-value \
-          --secret-id sonatype_central_credentials \
-          --query SecretString \
-          --output text)
+        # # Get Sonatype credentials
+        # SONATYPE_CREDS=$(aws secretsmanager get-secret-value \
+        #   --secret-id sonatype_central_credentials \
+        #   --query SecretString \
+        #   --output text)
 
-        # Create gradle.properties
-        cat << EOF > gradle.properties
-        signingEnabled=true
-        signing.keyId=${KEY_ID}
-        signing.password=$(jq -r '.passphrase' keys.json)
-        signing.secretKeyRingFile=${HOME}/.gnupg/secring.gpg
-        mavenUsername=$(echo $SONATYPE_CREDS | jq -r '.username')
-        mavenPassword=$(echo $SONATYPE_CREDS | jq -r '.password')
-        EOF
+        # # Create gradle.properties
+        # cat << EOF > gradle.properties
+        # signingEnabled=true
+        # signing.keyId=${KEY_ID}
+        # signing.password=$(jq -r '.passphrase' keys.json)
+        # signing.secretKeyRingFile=${HOME}/.gnupg/secring.gpg
+        # mavenUsername=$(echo $SONATYPE_CREDS | jq -r '.username')
+        # mavenPassword=$(echo $SONATYPE_CREDS | jq -r '.password')
+        # EOF
 
-        # Export secret keyring for Gradle
-        gpg --keyring secring.gpg --export-secret-keys > ${HOME}/.gnupg/secring.gpg
+        # # Export secret keyring for Gradle
+        # gpg --keyring secring.gpg --export-secret-keys > ${HOME}/.gnupg/secring.gpg
 
-    - name: Build and Publish
-      run: |
-        ./gradlew clean build publish
+    # - name: Build and Publish
+    #   run: |
+    #     ./gradlew clean build publish
 
