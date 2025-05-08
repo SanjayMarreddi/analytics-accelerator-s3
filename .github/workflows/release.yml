@@ -33,24 +33,18 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5
 
-    - name: Setup GPG and Gradle configuration
+    - name: Create Gradle configuration
       run: |
-        # Create GPG directories and config
-        mkdir -p $HOME/.gnupg
-        chmod 700 $HOME/.gnupg
-        echo "use-agent" > $HOME/.gnupg/gpg.conf
-        echo "pinentry-mode loopback" >> $HOME/.gnupg/gpg.conf
+        # Get passphrase and store it
+        aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id gpg-passphrase --query SecretString --output text | jq -r .passphrase > passphrase.txt
         
-        # Get and store passphrase
-        aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.GPG_KEY_ID }} --query SecretString --output text | jq -r .passphrase > passphrase.txt
-        
-        # Import private key
+        # Import private key with passphrase
         aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.GPG_KEY_ID }} --query SecretString --output text | jq -r .privateKey | gpg --import --batch --passphrase-file passphrase.txt
         
-        # Export secret keys
+        # Export secret keys directly
         gpg --batch --pinentry-mode=loopback --keyring secring.gpg --export-secret-keys --passphrase-file passphrase.txt > $HOME/.gnupg/secring.gpg
         
-        # Create gradle.properties with all required configurations
+        # Create gradle.properties
         {
           echo "signingEnabled=true"
           echo "mavenUsername=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .username)"
