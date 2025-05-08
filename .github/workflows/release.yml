@@ -52,12 +52,8 @@ jobs:
         KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep "sec" | tail -n1 | awk '{print $2}' | cut -d'/' -f2)
         echo "Using Key ID: $KEY_ID"
         
-        echo "Step 3: Exporting key (modified command)"
-        # Try one of these alternative export commands:
-        
-        # Option 1: Export with armor first
-        gpg --batch --armor --export-secret-keys $KEY_ID | \
-          gpg --batch --import --no-tty
+        echo "Step 3: Exporting key"
+        # Single export command
         gpg --batch --keyring secring.gpg --no-default-keyring \
           --export-secret-keys > $HOME/.gnupg/secring.gpg
         
