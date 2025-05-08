@@ -35,7 +35,14 @@ jobs:
 
     - name: Create Gradle configuration
       run: |
-        # Get passphrase from separate secret
+        # Setup GPG configuration first
+        mkdir -p $HOME/.gnupg
+        chmod 700 $HOME/.gnupg
+        echo "use-agent" > $HOME/.gnupg/gpg.conf
+        echo "pinentry-mode loopback" >> $HOME/.gnupg/gpg.conf
+        echo "allow-loopback-pinentry" > $HOME/.gnupg/gpg-agent.conf
+
+        # Get passphrase
         aws secretsmanager get-secret-value \
           --region ${{ vars.AWS_REGION }} \
           --secret-id gpg-passphrase \
@@ -47,13 +54,13 @@ jobs:
           --region ${{ vars.AWS_REGION }} \
           --secret-id ${{ secrets.GPG_KEY_ID }} \
           --query SecretString \
-          --output text | jq -r .privateKey | gpg --import --batch --passphrase-file passphrase.txt
+          --output text | jq -r .privateKey | \
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file passphrase.txt --import
 
-        # Export secret keys with passphrase
-        gpg --batch --pinentry-mode=loopback \
-          --keyring secring.gpg \
-          --export-secret-keys \
-          --passphrase-file passphrase.txt > $HOME/.gnupg/secring.gpg
+        # Export secret keys with explicit passphrase
+        gpg --batch --yes --pinentry-mode loopback \
+          --passphrase-file passphrase.txt \
+          --export-secret-keys > $HOME/.gnupg/secring.gpg
 
         # Create gradle.properties
         {
