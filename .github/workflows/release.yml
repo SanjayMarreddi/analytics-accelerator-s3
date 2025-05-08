@@ -35,51 +35,18 @@ jobs:
 
     - name: Create Gradle configuration
       run: |
-        # Setup GPG configuration first
-        rm -rf $HOME/.gnupg
-        mkdir -p $HOME/.gnupg
-        chmod 700 $HOME/.gnupg
-        echo "use-agent" > $HOME/.gnupg/gpg.conf
-        echo "pinentry-mode loopback" >> $HOME/.gnupg/gpg.conf
-        echo "allow-loopback-pinentry" > $HOME/.gnupg/gpg-agent.conf
-
-        # Debug info
-        echo "Available keys:"
-        gpg --list-secret-keys --keyid-format LONG
+        # Get passphrase and import key
+        aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id gpg-passphrase --query SecretString --output text | jq -r .passphrase > passphrase.txt
+        aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.GPG_KEY_ID }} --query SecretString --output text | jq -r .privateKey | gpg --import --batch --passphrase-file passphrase.txt
         
-        # Get passphrase
-        aws secretsmanager get-secret-value \
-          --region ${{ vars.AWS_REGION }} \
-          --secret-id gpg-passphrase \
-          --query SecretString \
-          --output text | jq -r .passphrase > passphrase.txt
-        echo "Passphrase retrieved"
-
-        # Import private key using passphrase
-        aws secretsmanager get-secret-value \
-          --region ${{ vars.AWS_REGION }} \
-          --secret-id ${{ secrets.GPG_KEY_ID }} \
-          --query SecretString \
-          --output text | jq -r .privateKey | \
-          gpg --batch --yes --pinentry-mode loopback --passphrase-file passphrase.txt --import
-        echo "Key imported"
-
-
-        # List keys after import
-        echo "Keys after import:"
-        gpg --list-secret-keys --keyid-format LONG
+        # Export keys simply
+        gpg --batch --pinentry-mode=loopback --keyring secring.gpg --export-secret-keys --passphrase-file passphrase.txt > $HOME/.gnupg/secring.gpg
         
-        # Export secret keys with explicit passphrase
-        gpg --batch --yes --pinentry-mode loopback \
-          --passphrase-file passphrase.txt \
-          --export-secret-key 25557E2C > $HOME/.gnupg/secring.gpg
-
         # Create gradle.properties
         {
           echo "signingEnabled=true"
           echo "mavenUsername=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .username)"
           echo "mavenPassword=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .password)"
-          echo "# Signing key: https://keys.openpgp.org/vks/v1/by-fingerprint/FAC40B939F532005395118AF259316AA25557E2C"
           echo "signing.keyId=25557E2C"
           echo "signing.password=$(cat passphrase.txt)"
           echo "signing.secretKeyRingFile=$HOME/.gnupg/secring.gpg"
