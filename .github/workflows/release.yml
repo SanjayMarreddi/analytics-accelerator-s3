@@ -35,7 +35,7 @@ jobs:
 
     - name: Create Gradle configuration
       env:
-        GNUPGHOME: /tmp/gpg_temp  # Use isolated GPG home
+        GNUPGHOME: /tmp/gpg_temp
       run: |
         # Create clean GPG environment
         mkdir -p $GNUPGHOME
@@ -72,74 +72,6 @@ jobs:
         # Debug: List contents of GNUPGHOME
         echo "Contents of $GNUPGHOME:"
         ls -la $GNUPGHOME
-
-    # - name: Create Gradle configuration
-    #   run: |
-    #     echo "Step 1: Getting passphrase..."
-    #     aws secretsmanager get-secret-value \
-    #       --region ${{ vars.AWS_REGION }} \
-    #       --secret-id gpg-passphrase \
-    #       --query SecretString \
-    #       --output text | jq -r .passphrase | tr -d '\n' > passphrase.txt
-    #     echo "✓ Passphrase retrieved (length: $(wc -c < passphrase.txt))"
-        
-    #     echo "Step 2: Importing private key..."
-    #     aws secretsmanager get-secret-value \
-    #       --region ${{ vars.AWS_REGION }} \
-    #       --secret-id ${{ secrets.GPG_KEY_ID }} \
-    #       --query SecretString \
-    #       --output text | jq -r .privateKey | \
-    #       gpg --import --batch --passphrase-file passphrase.txt
-        
-    #     echo "Step 3: Verifying imported keys..."
-    #     echo "Available secret keys:"
-    #     gpg --list-secret-keys --keyid-format LONG
-        
-    #     echo "Step 4: Getting key ID..."
-    #     KEY_ID=$(gpg --list-secret-keys --keyid-format SHORT | grep sec | awk '{print $2}' | cut -d'/' -f2)
-    #     echo "Found Key ID: $KEY_ID"
-        
-    #     echo "Step 5: Exporting secret keys..."
-    #     echo "GPG version: $(gpg --version | head -n1)"
-    #     echo "Current directory structure:"
-    #     ls -la $HOME/.gnupg/
-        
-    #     echo "Executing export command..."
-    #     gpg --batch --pinentry-mode=loopback \
-    #       --keyring secring.gpg \
-    #       --export-secret-keys \
-    #       --passphrase-file passphrase.txt > $HOME/.gnupg/secring.gpg
-        
-    #     echo "Verifying export..."
-    #     if [ -f "$HOME/.gnupg/secring.gpg" ]; then
-    #       echo "✓ secring.gpg created (size: $(ls -lh $HOME/.gnupg/secring.gpg | awk '{print $5}'))"
-    #     else
-    #       echo "❌ secring.gpg not created"
-    #       exit 1
-    #     fi
-        
-    #     echo "Step 6: Creating gradle.properties..."
-    #     {
-    #       echo "signingEnabled=true"
-    #       echo "mavenUsername=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .username)"
-    #       echo "mavenPassword=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .password)"
-    #       echo "signing.keyId=$KEY_ID"
-    #       echo "signing.password=$(cat passphrase.txt)"
-    #       echo "signing.secretKeyRingFile=$HOME/.gnupg/secring.gpg"
-    #     } > gradle.properties
-        
-    #     echo "Verifying gradle.properties..."
-    #     if [ -f "gradle.properties" ]; then
-    #       echo "✓ gradle.properties created (keys configured: $(grep -c "signing." gradle.properties))"
-    #     else
-    #       echo "❌ gradle.properties not created"
-    #       exit 1
-    #     fi
-        
-    #     echo "Final GPG status:"
-    #     gpg --list-secret-keys --keyid-format LONG
-        
-    #     echo "Configuration complete!"
 
     - name: Build with Gradle
       run: ./gradlew clean build
