@@ -1,4 +1,4 @@
-name: Gradle Package
+name: Maven Central Release
 
 on:
   workflow_dispatch:
@@ -6,57 +6,69 @@ on:
     types: [published]
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
       id-token: write
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Important for git history
+
     - name: Set up JDK 8
       uses: actions/setup-java@v4
       with:
         java-version: '8'
         distribution: 'corretto'
-        server-id: github
-        settings-path: ${{ github.workspace }}
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
         role-to-assume: ${{ secrets.ASSUME_ROLE_ARN }}
-        aws-region: ${{ vars.AWS_REGION }}
-        role-session-name: github-actions-session
+        aws-region: us-east-1  # Explicitly set to us-east-1 as per doc
+        role-session-name: maven-publish-session
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5
-
-    - name: Create Gradle configuration
+    - name: Setup GPG and Gradle properties
       run: |
-        # Get passphrase and store it
-        aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id gpg-passphrase --query SecretString --output text | jq -r .passphrase > passphrase.txt
-        
-        # Import private key with passphrase
-        aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.GPG_KEY_ID }} --query SecretString --output text | jq -r .privateKey | gpg --import --batch --passphrase-file passphrase.txt
-        
-        # Export secret keys directly
-        gpg --batch --pinentry-mode=loopback --keyring secring.gpg --export-secret-keys --passphrase-file passphrase.txt > $HOME/.gnupg/secring.gpg
-        
+        # Get GPG keys from AWS Secrets Manager
+        aws secretsmanager get-secret-value \
+          --secret-id secrets.GPG_KEY_ID \
+          --query SecretString \
+          --output text > keys.json
+
+        # Extract keys
+        jq -r '.privateKey' keys.json > private-key.asc
+        jq -r '.publicKey' keys.json > public-key.asc
+
+        # Import GPG keys
+        gpg --batch --import private-key.asc
+        gpg --import public-key.asc
+
+        # Get key ID
+        KEY_ID=$(gpg --list-keys --keyid-format SHORT | grep sec | awk '{print $2}' | cut -d'/' -f2)
+
+        # Get Sonatype credentials
+        SONATYPE_CREDS=$(aws secretsmanager get-secret-value \
+          --secret-id sonatype_central_credentials \
+          --query SecretString \
+          --output text)
+
         # Create gradle.properties
-        {
-          echo "signingEnabled=true"
-          echo "mavenUsername=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .username)"
-          echo "mavenPassword=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .password)"
-          echo "# Signing key: https://keys.openpgp.org/vks/v1/by-fingerprint/FAC40B939F532005395118AF259316AA25557E2C"
-          echo "signing.keyId=25557E2C"
-          echo "signing.password=$(cat passphrase.txt)"
-          echo "signing.secretKeyRingFile=$HOME/.gnupg/secring.gpg"
-        } > gradle.properties
+        cat << EOF > gradle.properties
+        signingEnabled=true
+        signing.keyId=${KEY_ID}
+        signing.password=$(jq -r '.passphrase' keys.json)
+        signing.secretKeyRingFile=${HOME}/.gnupg/secring.gpg
+        mavenUsername=$(echo $SONATYPE_CREDS | jq -r '.username')
+        mavenPassword=$(echo $SONATYPE_CREDS | jq -r '.password')
+        EOF
 
-    - name: Build with Gradle
-      run: ./gradlew clean build
+        # Export secret keyring for Gradle
+        gpg --keyring secring.gpg --export-secret-keys > ${HOME}/.gnupg/secring.gpg
 
-    - name: Publish to Maven Central
-      run: ./gradlew publish
+    - name: Build and Publish
+      run: |
+        ./gradlew clean build publish
+
