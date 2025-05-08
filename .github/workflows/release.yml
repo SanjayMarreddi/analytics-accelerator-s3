@@ -35,34 +35,55 @@ jobs:
 
     - name: Create Gradle configuration
       run: |
-        # Import key (no passphrase needed)
+        echo "Step 1: Initial GPG State"
+        echo "----------------------"
+        echo "GPG Version:"
+        gpg --version | head -n 1
+        echo "\nInitial Keys (if any):"
+        gpg --list-secret-keys --keyid-format LONG || echo "No keys present"
+        
+        echo "\nStep 2: Clearing GPG state"
+        echo "----------------------"
+        rm -rf $HOME/.gnupg
+        mkdir -p $HOME/.gnupg
+        chmod 700 $HOME/.gnupg
+        
+        echo "\nStep 3: Importing our key"
+        echo "----------------------"
         aws secretsmanager get-secret-value \
           --region ${{ vars.AWS_REGION }} \
           --secret-id ${{ secrets.GPG_KEY_ID }} \
           --query SecretString \
           --output text | jq -r .privateKey | gpg --import --batch
-
-        # Get the key ID we just imported
-        KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep "sec" | tail -n1 | awk '{print $2}' | cut -d'/' -f2)
-        echo "Using key ID: $KEY_ID"
-
-        # Export the key (no passphrase needed)
-        gpg --batch --keyring secring.gpg --export-secret-keys "$KEY_ID" > $HOME/.gnupg/secring.gpg
-
-        # Create gradle.properties (no signing.password needed)
-        {
-          echo "signingEnabled=true"
-          echo "mavenUsername=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .username)"
-          echo "mavenPassword=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .password)"
-          echo "signing.keyId=$(echo $KEY_ID | tail -c 9)"  # Get last 8 characters
-          echo "signing.secretKeyRingFile=$HOME/.gnupg/secring.gpg"
-        } > gradle.properties
-
-        # Debug info
-        echo "GPG version: $(gpg --version | head -n1)"
-        echo "Exported key size: $(ls -l $HOME/.gnupg/secring.gpg | awk '{print $5}')"
-        echo "GPG keys available:"
+        
+        echo "\nStep 4: Keys after import"
+        echo "----------------------"
+        echo "All Secret Keys:"
         gpg --list-secret-keys --keyid-format LONG
+        echo "\nAll Public Keys:"
+        gpg --list-keys --keyid-format LONG
+        
+        echo "\nStep 5: GPG Directory Contents"
+        echo "----------------------"
+        ls -la $HOME/.gnupg/
+        
+        echo "\nStep 6: Detailed Key Info"
+        echo "----------------------"
+        gpg --list-secret-keys --keyid-format LONG --with-colons
+
+        # Get our specific key ID
+        KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep "sec" | tail -n1 | awk '{print $2}' | cut -d'/' -f2)
+        echo "\nOur Key ID: $KEY_ID"
+        
+        echo "\nStep 7: Attempting Export"
+        echo "----------------------"
+        # Try to export only our specific key
+        gpg --batch --keyring secring.gpg --export-secret-keys "$KEY_ID" > $HOME/.gnupg/secring.gpg
+        
+        echo "Export result: $?"
+        echo "Exported file size: $(ls -l $HOME/.gnupg/secring.gpg | awk '{print $5}')"
+        
+        # Create gradle.properties as before...
 
     # - name: Create Gradle configuration
     #   run: |
