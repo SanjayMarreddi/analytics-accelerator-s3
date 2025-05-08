@@ -53,21 +53,25 @@ jobs:
         echo "Using Key ID: $KEY_ID"
         
         echo "Step 3: Exporting key"
-        # Single export command
-        gpg --batch --keyring secring.gpg --no-default-keyring \
-          --export-secret-keys > $HOME/.gnupg/secring.gpg
+        # Single export command (corrected path)
+        gpg --batch --keyring $GNUPGHOME/secring.gpg --no-default-keyring \
+          --export-secret-keys > $GNUPGHOME/secring.gpg
         
-        # Create gradle.properties
+        # Create gradle.properties (update path here too)
         {
           echo "signingEnabled=true"
           echo "mavenUsername=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .username)"
           echo "mavenPassword=$(aws secretsmanager get-secret-value --region ${{ vars.AWS_REGION }} --secret-id ${{ secrets.MAVEN_TOKEN_ID }} --query SecretString --output text | jq -r .password)"
           echo "signing.keyId=$(echo $KEY_ID | tail -c 9)"
-          echo "signing.secretKeyRingFile=$HOME/.gnupg/secring.gpg"
+          echo "signing.secretKeyRingFile=$GNUPGHOME/secring.gpg"
         } > gradle.properties
 
         # Verify export
-        echo "Export file size: $(ls -l $HOME/.gnupg/secring.gpg | awk '{print $5}')"
+        echo "Export file size: $(ls -l $GNUPGHOME/secring.gpg | awk '{print $5}')"
+        
+        # Debug: List contents of GNUPGHOME
+        echo "Contents of $GNUPGHOME:"
+        ls -la $GNUPGHOME
 
     # - name: Create Gradle configuration
     #   run: |
