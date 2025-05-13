@@ -47,19 +47,14 @@ public class SingleObjectReadTest extends IntegrationTestBase {
         System.out.printf("\nStarting test with: Stream=%s, Iterations=%d%n", config.name, ITERATIONS);
 
         S3AsyncClient s3AsyncClient = S3AsyncClient.crtBuilder().maxConcurrency(600).region(Region.US_EAST_2).build();
-        S3SeekableInputStreamFactory factory = new S3SeekableInputStreamFactory(
-                new S3SdkObjectClient(s3AsyncClient), S3SeekableInputStreamConfiguration.DEFAULT);
         S3URI avroURI = S3URI.of(getS3ExecutionContext().getConfiguration().getBucket(),
                 getS3ExecutionContext().getConfiguration().getPrefix() + AVRO_FILE);
-
-        // Warmup run
-        executeReads(avroURI, factory, config);
 
         // Actual test runs
         List<Double> times = results.computeIfAbsent(config.name, k -> new ArrayList<>());
         for (int i = 0; i < ITERATIONS; i++) {
             System.out.printf("Iteration %d/%d%n", i + 1, ITERATIONS);
-            double time = executeReads(avroURI, factory, config);
+            double time = executeReads(avroURI, s3AsyncClient, config);
             times.add(time);
         }
 
@@ -68,7 +63,9 @@ public class SingleObjectReadTest extends IntegrationTestBase {
         }
     }
 
-    private double executeReads(S3URI avroURI, S3SeekableInputStreamFactory factory, Config config) throws IOException {
+    private double executeReads(S3URI avroURI, S3AsyncClient s3AsyncClient, Config config) throws IOException {
+        S3SeekableInputStreamFactory factory = new S3SeekableInputStreamFactory(
+                new S3SdkObjectClient(s3AsyncClient), S3SeekableInputStreamConfiguration.DEFAULT);
         try (S3SeekableInputStream stream = factory.createStream(avroURI, config.streamInfo)) {
             long start = System.nanoTime();
             byte[] buffer = new byte[TOTAL_SIZE];
