@@ -184,6 +184,11 @@ val integrationTest = task<Test>("integrationTest") {
     testLogging {
         events("passed")
         events("failed")
+        events("skipped")
+        events("standardOut")
+        events("standardError")
+        showExceptions = true
+        showStandardStreams = true
     }
 
     javaLauncher = javaToolchains.launcherFor {

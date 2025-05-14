@@ -22,6 +22,7 @@ public class SingleObjectReadTest extends IntegrationTestBase {
     private static final String AVRO_FILE = "0005df6e-df31-4b23-adbf-12f17bcbd79a-m1682.avro";
     private static final int ITERATIONS = 10;
     private static final int TOTAL_TESTS = 2;
+    private static final int CHUNK_SIZE = 65_536; // 64 KB
     private static final int TOTAL_SIZE = 8_388_608; // 8 MB
 
     private static final Map<String, List<Double>> results = new ConcurrentHashMap<>();
@@ -67,10 +68,22 @@ public class SingleObjectReadTest extends IntegrationTestBase {
         S3SeekableInputStreamFactory factory = new S3SeekableInputStreamFactory(
                 new S3SdkObjectClient(s3AsyncClient), S3SeekableInputStreamConfiguration.DEFAULT);
         try (S3SeekableInputStream stream = factory.createStream(avroURI, config.streamInfo)) {
+            byte[] buffer = new byte[CHUNK_SIZE];
+            int bytesRead;
+            int totalBytesRead = 0;
+            int chunkCount = 0;
             long start = System.nanoTime();
-            byte[] buffer = new byte[TOTAL_SIZE];
-            stream.read(buffer);
-            return (System.nanoTime() - start) / 1_000_000.0; // Convert to milliseconds
+            while (totalBytesRead < TOTAL_SIZE && (bytesRead = stream.read(buffer)) != -1) {
+                totalBytesRead += bytesRead;
+                chunkCount++;
+                if (totalBytesRead >= TOTAL_SIZE) {
+                    break;
+                }
+            }
+            double elapsedMs = (System.nanoTime() - start) / 1_000_000.0;
+            System.out.printf("Read %d bytes in %d chunks of %d bytes each%n",
+                    totalBytesRead, chunkCount, CHUNK_SIZE);
+            return elapsedMs;
         }
     }
 
